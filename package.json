@@ -1,0 +1,47 @@
+{
+  "name": "lims-app",
+  "version": "1.0.0",
+  "description": "Laboratory Information Management System built with Node.js, Next.js, NestJS, Express, Drizzle, MySQL",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=packages/backend-express\" \"npm run dev --workspace=packages/frontend-next\"",
+    "build": "npm run build --workspace=packages/backend-express && npm run build --workspace=packages/frontend-next",
+    "start": "npm start --workspace=packages/backend-express",
+    "test": "npm test --workspace=packages/backend-express",
+    "seed": "node migrations/seed.js",
+    "db:migrate": "node migrations/migrate.js",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:clean": "docker-compose down -v",
+    "docker:build": "docker-compose up -d --build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "keywords": [
+    "laboratory",
+    "lims",
+    "analysis",
+    "management",
+    "node.js",
+    "next.js",
+    "nestjs",
+    "express",
+    "mysql"
+  ],
+  "author": "Yahia Devs",
+  "email": "yahiadevs@gmail.com",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yahiadevs-max/lims-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yahiadevs-max/lims-app/issues"
+  },
+  "homepage": "https://github.com/yahiadevs-max/lims-app#readme"
+}
