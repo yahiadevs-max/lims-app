@@ -1,0 +1,135 @@
+version: '3.9'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: lims-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${DB_NAME:-lims_db}
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./migrations/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-root_password}"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - lims-network
+
+  # Redis Cache (Optional)
+  redis:
+    image: redis:7-alpine
+    container_name: lims-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 10s
+      retries: 5
+    networks:
+      - lims-network
+
+  # Backend Express API
+  backend-express:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: lims-backend-express
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root_password}
+      DB_NAME: ${DB_NAME:-lims_db}
+      PORT: 3001
+      NODE_ENV: ${NODE_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET}
+      EMAIL_HOST: ${EMAIL_HOST}
+      EMAIL_USER: ${EMAIL_USER}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/backend-express:/app
+      - /app/node_modules
+      - ./logs:/app/logs
+    networks:
+      - lims-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      timeout: 10s
+      retries: 5
+
+  # Frontend Next.js
+  frontend-next:
+    build:
+      context: ./packages/frontend-next
+      dockerfile: ../../docker/frontend/Dockerfile
+    container_name: lims-frontend-next
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+    depends_on:
+      - backend-express
+    volumes:
+      - ./packages/frontend-next:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - lims-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: lims-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend-express
+      - frontend-next
+    networks:
+      - lims-network
+
+  # phpMyAdmin (Development only)
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: lims-phpmyadmin
+    restart: always
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: ${DB_USER:-root}
+      PMA_PASSWORD: ${DB_PASSWORD:-root_password}
+    depends_on:
+      - mysql
+    networks:
+      - lims-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  lims-network:
+    driver: bridge
